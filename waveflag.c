@@ -45,6 +45,7 @@ static struct { double x, y; } mesh_points[] =
 #define M(i) \
 	x_aspect (mesh_points[i].x, aspect), \
 	y_aspect (mesh_points[i].y, aspect)
+#define P(x, y) x, y
 
 static inline double x_aspect (double v, double aspect)
 {
@@ -64,27 +65,39 @@ wave_path_create (double aspect)
 
 	cairo_scale (cr, SIZE/128.*SCALE, SIZE/128.*SCALE);
 
-	cairo_move_to (cr, 127.15,81.52);
-	cairo_rel_line_to (cr, -20.51,-66.94);
-	cairo_rel_curve_to (cr, -0.61,-2,-2.22,-3.53,-4.25,-4.03);
-	cairo_rel_curve_to (cr, -0.48,-0.12,-0.96,-0.18,-1.44,-0.18);
-	cairo_rel_curve_to (cr, -1.56,0,-3.07,0.61,-4.2,1.74);
-	cairo_rel_curve_to (cr, -9.56,9.56,-17.94,11.38,-30.07,11.38);
-	cairo_rel_curve_to (cr, -3.68,0,-7.72,-0.18,-11.99,-0.38);
-	cairo_rel_curve_to (cr, -3.37,-0.15,-6.85,-0.31,-10.62,-0.4);
-	cairo_rel_curve_to (cr, -0.66,-0.02,-1.31,-0.02,-1.95,-0.02);
-	cairo_rel_curve_to (cr, -30.67,0,-40.49,18.56,-40.89,19.35);
-	cairo_rel_curve_to (cr, -0.52,1.01,-0.73,2.16,-0.62,3.29);
-	cairo_rel_line_to (cr, 6.72,66.95);
-	cairo_rel_curve_to (cr, 0.22,2.22,1.67,4.13,3.75,4.95);
-	cairo_rel_curve_to (cr, 0.7,0.27,1.43,0.4,2.16,0.4);
-	cairo_rel_curve_to (cr, 1.43,0,2.84,-0.52,3.95,-1.5);
-	cairo_rel_curve_to (cr, 0.1,-0.09,12.42,-10.63,32.13,-10.63);
-	cairo_rel_curve_to (cr, 2.52,0,5.09,0.17,7.64,0.51);
-	cairo_rel_curve_to (cr, 9.27,1.23,16.03,1.78,21.95,1.78);
-	cairo_rel_curve_to (cr, 18.93,0,32.93,-6.1,46.82,-20.38);
-	cairo_curve_to (cr, 127.24,85.85,127.79,83.59,127.15,81.52);
+	cairo_matrix_t aspect_matrix = {
+		(aspect >= 1. ? 1. : aspect), 0,
+		0, (aspect <= 1. ? 1. : 1. / aspect),
+		(aspect >= 1. ? 0 : 64 * (1 - aspect)),
+		(aspect <= 1. ? 0 : 64 * (1 - (1. / aspect)))
+	};
+
+	cairo_save (cr);
+	cairo_transform (cr, &aspect_matrix);
+
+	cairo_move_to (cr, P(127.15,81.52));
+	cairo_rel_line_to (cr, P(-20.51,-66.94));
+	cairo_rel_curve_to (cr, P(-0.61,-2), P(-2.22,-3.53), P(-4.25,-4.03));
+	cairo_rel_curve_to (cr, P(-0.48,-0.12), P(-0.96,-0.18), P(-1.44,-0.18));
+	cairo_rel_curve_to (cr, P(-1.56,0), P(-3.07,0.61), P(-4.2,1.74));
+	cairo_rel_curve_to (cr, P(-9.56,9.56), P(-17.94,11.38), P(-30.07,11.38));
+	cairo_rel_curve_to (cr, P(-3.68,0), P(-7.72,-0.18), P(-11.99,-0.38));
+	cairo_rel_curve_to (cr, P(-3.37,-0.15), P(-6.85,-0.31), P(-10.62,-0.4));
+	cairo_rel_curve_to (cr, P(-0.66,-0.02), P(-1.31,-0.02), P(-1.95,-0.02));
+	cairo_rel_curve_to (cr, P(-30.67,0), P(-40.49,18.56), P(-40.89,19.35));
+	cairo_rel_curve_to (cr, P(-0.52,1.01), P(-0.73,2.16), P(-0.62,3.29));
+	cairo_rel_line_to (cr, P(6.72,66.95));
+	cairo_rel_curve_to (cr, P(0.22,2.22), P(1.67,4.13), P(3.75,4.95));
+	cairo_rel_curve_to (cr, P(0.7,0.27), P(1.43,0.4), P(2.16,0.4));
+	cairo_rel_curve_to (cr, P(1.43,0), P(2.84,-0.52), P(3.95,-1.5));
+	cairo_rel_curve_to (cr, P(0.1,-0.09), P(12.42,-10.63), P(32.13,-10.63));
+	cairo_rel_curve_to (cr, P(2.52,0), P(5.09,0.17), P(7.64,0.51));
+	cairo_rel_curve_to (cr, P(9.27,1.23), P(16.03,1.78), P(21.95,1.78));
+	cairo_rel_curve_to (cr, P(18.93,0), P(32.93,-6.1), P(46.82,-20.38));
+	cairo_curve_to (cr, P(127.24,85.85), P(127.79,83.59), P(127.15,81.52));
 	cairo_close_path (cr);
+
+	cairo_restore (cr);
 
 	cairo_identity_matrix (cr);
 	path = cairo_copy_path (cr);
