@@ -30,8 +30,33 @@
 
 static unsigned int debug;
 
+#define std_aspect (5./3.)
+static struct { double x, y; } mesh_points[] =
+{
+  { -1,  43},
+  { 30,  -3},
+  { 77,  47},
+  {104,   1},
+  {130,  84},
+  {100, 138},
+  { 45,  80},
+  {  7, 127},
+};
+#define M(i) \
+	x_aspect (mesh_points[i].x, aspect), \
+	y_aspect (mesh_points[i].y, aspect)
+
+static inline double x_aspect (double v, double aspect)
+{
+	return aspect >= 1. ? v : (v - 64) * aspect + 64;
+}
+static inline double y_aspect (double v, double aspect)
+{
+	return aspect <= 1. ? v : (v - 64) / aspect + 64;
+}
+
 static cairo_path_t *
-wave_path_create (void)
+wave_path_create (double aspect)
 {
 	cairo_surface_t *surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 0,0);
 	cairo_t *cr = cairo_create (surface);
@@ -69,21 +94,8 @@ wave_path_create (void)
 	return path;
 }
 
-static struct { double x, y; } mesh_points[] =
-{
-  { -1,  43},
-  { 30,  -3},
-  { 77,  47},
-  {104,   1},
-  {130,  84},
-  {100, 138},
-  { 45,  80},
-  {  7, 127},
-};
-#define M(i) mesh_points[i].x, mesh_points[i].y
-
 static cairo_pattern_t *
-wave_mesh_create (void)
+wave_mesh_create (double aspect, int alpha)
 {
 	cairo_pattern_t *pattern = cairo_pattern_create_mesh();
 	cairo_matrix_t scale_matrix = {128./SIZE/SCALE, 0, 0, 128./SIZE/SCALE, 0, 0};
@@ -95,10 +107,20 @@ wave_mesh_create (void)
 	cairo_mesh_pattern_line_to(pattern,   M(4));
 	cairo_mesh_pattern_curve_to(pattern,  M(5), M(6), M(7));
 
-	cairo_mesh_pattern_set_corner_color_rgb(pattern, 0, 0, 0, .5);
-	cairo_mesh_pattern_set_corner_color_rgb(pattern, 1, 1, 0, .5);
-	cairo_mesh_pattern_set_corner_color_rgb(pattern, 2, 1, 1, .5);
-	cairo_mesh_pattern_set_corner_color_rgb(pattern, 3, 0, 1, .5);
+	if (alpha)
+	{
+		cairo_mesh_pattern_set_corner_color_rgba(pattern, 0, 1, 1, 1, .5);
+		cairo_mesh_pattern_set_corner_color_rgba(pattern, 1,.5,.5,.5, .5);
+		cairo_mesh_pattern_set_corner_color_rgba(pattern, 2, 0, 0, 0, .5);
+		cairo_mesh_pattern_set_corner_color_rgba(pattern, 3,.5,.5,.5, .5);
+	}
+	else
+	{
+		cairo_mesh_pattern_set_corner_color_rgb(pattern, 0, 0, 0, .5);
+		cairo_mesh_pattern_set_corner_color_rgb(pattern, 1, 1, 0, .5);
+		cairo_mesh_pattern_set_corner_color_rgb(pattern, 2, 1, 1, .5);
+		cairo_mesh_pattern_set_corner_color_rgb(pattern, 3, 0, 1, .5);
+	}
 
 	cairo_mesh_pattern_end_patch(pattern);
 
@@ -125,10 +147,12 @@ scale_flag (cairo_surface_t *flag)
 }
 
 static cairo_surface_t *
-load_scaled_flag (const char *filename)
+load_scaled_flag (const char *filename, double *aspect)
 {
 	cairo_surface_t *flag = cairo_image_surface_create_from_png (filename);
 	cairo_surface_t *scaled = scale_flag (flag);
+	*aspect = (double) cairo_image_surface_get_width (flag) /
+		  (double) cairo_image_surface_get_height (flag);
 	cairo_surface_destroy (flag);
 	return scaled;
 }
@@ -217,11 +241,11 @@ create_image (void)
 }
 
 static cairo_surface_t *
-wave_surface_create (void)
+wave_surface_create (double aspect)
 {
 	cairo_t *cr = create_image ();
 	cairo_surface_t *surface = cairo_surface_reference (cairo_get_target (cr));
-	cairo_pattern_t *mesh = wave_mesh_create ();
+	cairo_pattern_t *mesh = wave_mesh_create (aspect, 0);
 	cairo_set_source (cr, mesh);
 	cairo_paint (cr);
 	cairo_pattern_destroy (mesh);
@@ -282,35 +306,61 @@ texture_map (cairo_surface_t *src, cairo_surface_t *tex)
 static void
 wave_flag (const char *filename, const char *out_prefix)
 {
-	static cairo_path_t *wave_path;
-	static cairo_surface_t *wave_surface;
+	static cairo_path_t *standard_wave_path;
+	static cairo_surface_t *standard_wave_surface;
+	cairo_path_t *wave_path;
+	cairo_surface_t *wave_surface;
 	double border_luminosity;
 	int border_transparent;
 	char out[1000];
+	double aspect = 0;
 
 	cairo_surface_t *scaled_flag, *waved_flag;
 	cairo_t *cr;
 
-	if (!wave_path)
-		wave_path = wave_path_create ();
-	if (!wave_surface)
-		wave_surface = wave_surface_create ();
+	if (debug) printf ("Processing %s\n", filename);
 
-	printf ("Processing %s\n", filename);
-
-	scaled_flag = load_scaled_flag (filename);
+	scaled_flag = load_scaled_flag (filename, &aspect);
 	border_luminosity = calculate_border_luminosity_and_transparency (scaled_flag, &border_transparent);
+
+	aspect /= std_aspect;
+	aspect = sqrt (aspect); // Discount the effect
+	if (.9 <= aspect && aspect <= 1.1)
+	{
+		if (debug) printf ("Standard aspect ratio\n");
+		aspect = 1.;
+	}
+
+	if (aspect == 1.)
+	{
+		if (!standard_wave_path)
+			standard_wave_path = wave_path_create (aspect);
+		if (!standard_wave_surface)
+			standard_wave_surface = wave_surface_create (aspect);
+		wave_path = standard_wave_path;
+		wave_surface = standard_wave_surface;
+	}
+	else
+	{
+		wave_path = wave_path_create (aspect);
+		wave_surface = wave_surface_create (aspect);
+	}
+
+
 	waved_flag = texture_map (wave_surface, scaled_flag);
 	cairo_surface_destroy (scaled_flag);
 
 	cr = create_image ();
 	cairo_translate (cr, SCALE * MARGIN, SCALE * MARGIN);
 
+	// Paint waved flag
 	cairo_set_source_surface (cr, waved_flag, 0, 0);
 	cairo_append_path (cr, wave_path);
 	if (!debug)
 		cairo_clip_preserve (cr);
 	cairo_paint (cr);
+
+	// Paint border
 	if (!border_transparent)
 	{
 		double border_alpha = .5 + fabs (.5 - border_luminosity);
@@ -330,8 +380,24 @@ wave_flag (const char *filename, const char *out_prefix)
 	}
 	else
 	{
-		printf ("Transparent border\n");
+		if (debug) printf ("Transparent border\n");
 		cairo_new_path (cr);
+	}
+
+	// Paint shade gradient
+	{
+		cairo_pattern_t *gradient = wave_mesh_create (aspect, 1);
+		cairo_pattern_t *w = cairo_pattern_create_for_surface (waved_flag);
+
+		cairo_save (cr);
+		cairo_set_source (cr, gradient);
+
+		cairo_set_operator (cr, CAIRO_OPERATOR_SOFT_LIGHT);
+		cairo_mask (cr, w);
+
+		cairo_restore (cr);
+
+		cairo_pattern_destroy (w);
 	}
 
 	if (debug)
@@ -389,6 +455,10 @@ wave_flag (const char *filename, const char *out_prefix)
 
 	cairo_surface_write_to_png (cairo_get_target (cr), out);
 	cairo_destroy (cr);
+	if (wave_path != standard_wave_path)
+		cairo_path_destroy (wave_path);
+	if (wave_surface != standard_wave_surface)
+		cairo_surface_destroy (wave_surface);
 }
 
 int
@@ -398,7 +468,7 @@ main (int argc, char **argv)
 
 	if (argc < 3)
 	{
-	  fprintf (stderr, "Usage: [-debug] waveflag out-prefix [in.png]...\n");
+	  fprintf (stderr, "Usage: waveflag [-debug] out-prefix [in.png]...\n");
 	  return 1;
 	}
 
