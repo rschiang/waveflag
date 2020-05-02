@@ -336,6 +336,8 @@ wave_flag (const char *filename, const char *out_prefix)
 	scaled_flag = load_scaled_flag (filename, &aspect);
 	border_luminosity = calculate_border_luminosity_and_transparency (scaled_flag, &border_transparent);
 
+	if (debug) printf( "Luminosity %g transparent=%d\n", border_luminosity, border_transparent);
+
 	aspect /= std_aspect;
 	aspect = sqrt (aspect); // Discount the effect
 	if (.9 <= aspect && aspect <= 1.1)
@@ -376,9 +378,9 @@ wave_flag (const char *filename, const char *out_prefix)
 	// Paint border
 	if (!border_transparent)
 	{
-		double border_alpha = .5 + fabs (.5 - border_luminosity);
+		double border_alpha = .2 * (1 + border_luminosity);
 		double border_width = 3 * SCALE;
-		double border_gray = (1 - border_luminosity) * border_alpha;
+		double border_gray = 0x42/255. * border_luminosity;
 		if (debug)
 			printf ("Border: alpha %g width %g gray %g\n",
 				border_alpha, border_width/SCALE, border_gray);
